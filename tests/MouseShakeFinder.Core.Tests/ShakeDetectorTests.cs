@@ -100,4 +100,32 @@ public class ShakeDetectorTests
         var events = FeedZigzag(d, legs: 6, legLength: 60, legDurationMs: 50, startMs: 2000);
         Assert.Contains(ShakeEvent.Started, events);
     }
+
+    [Fact]
+    public void StaleAxisStateAfterStopDoesNotGrantPhantomReversal()
+    {
+        var d = NewDetector();
+        // Run a shake to completion. Its last leg (leg 6, i=5) moves in the
+        // negative-x direction, so the horizontal AxisTracker's internal
+        // state ends at _direction=-1, _segmentDistance=60 (>= MinSegmentDistance).
+        FeedZigzag(d, legs: 6, legLength: 60, legDurationMs: 50);
+        Assert.True(d.IsShaking);
+        Assert.Equal(ShakeEvent.Stopped, d.Tick(1000));
+        Assert.False(d.IsShaking);
+
+        // Feed a fresh zigzag of 4 legs starting in the +x direction, i.e.
+        // the opposite of the stale -x direction left over from the previous
+        // shake. With correctly reset state, the first leg of a fresh
+        // zigzag can never itself be a qualifying reversal (no prior
+        // direction to reverse from), so 4 legs yield only 3 genuine
+        // reversals -- one short of MinReversals (4), so no shake starts.
+        // With the bug (no reset on stop), the stale _direction=-1 /
+        // _segmentDistance=60 makes the very first post-stop leg (+x)
+        // itself qualify as a phantom reversal, pushing the total to 4
+        // and incorrectly starting a shake.
+        var events = FeedZigzag(d, legs: 4, legLength: 60, legDurationMs: 50, startMs: 2000);
+
+        Assert.DoesNotContain(ShakeEvent.Started, events);
+        Assert.False(d.IsShaking);
+    }
 }

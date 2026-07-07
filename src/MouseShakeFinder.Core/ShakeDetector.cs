@@ -42,6 +42,13 @@ public sealed class ShakeDetector
             _segmentDistance = Math.Abs(delta);
             return qualifies;
         }
+
+        /// <summary>Clears direction/segment state so the next shake starts fresh.</summary>
+        public void Reset()
+        {
+            _direction = 0;
+            _segmentDistance = 0;
+        }
     }
 
     private readonly ShakeSettings _settings;
@@ -106,6 +113,8 @@ public sealed class ShakeDetector
         {
             IsShaking = false;
             _reversalTimes.Clear();
+            _horizontal.Reset();
+            _vertical.Reset();
             return ShakeEvent.Stopped;
         }
 
