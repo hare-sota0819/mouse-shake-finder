@@ -11,6 +11,7 @@
     <SelfContained>true</SelfContained>
     <AssemblyName>MouseShakeFinder</AssemblyName>
     <RootNamespace>MouseShakeFinder</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
