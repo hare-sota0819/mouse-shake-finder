@@ -47,7 +47,7 @@ public class ShakeDetectorTests
     public void TinyJitterDoesNotStartShake()
     {
         var d = NewDetector();
-        // 5 px legs are below MinSegmentDistance (25 px).
+        // 5 px legs are below MinSegmentDistance (50 px).
         var events = FeedZigzag(d, legs: 12, legLength: 5, legDurationMs: 30);
         Assert.DoesNotContain(ShakeEvent.Started, events);
     }
@@ -56,9 +56,58 @@ public class ShakeDetectorTests
     public void SlowZigzagDoesNotStartShake()
     {
         var d = NewDetector();
-        // One reversal every 300 ms: never 4 reversals inside the 500 ms window.
+        // One reversal every 300 ms: too slow to clear MinLegSpeed (60px/300ms
+        // = 0.2 px/ms, below the 0.5 px/ms floor), and even ignoring speed,
+        // never 4 reversals inside the 500 ms window either.
         var events = FeedZigzag(d, legs: 10, legLength: 60, legDurationMs: 300);
         Assert.DoesNotContain(ShakeEvent.Started, events);
+    }
+
+    [Fact]
+    public void ModerateSpeedZigzagBelowSpeedThresholdDoesNotStartShake()
+    {
+        var d = NewDetector();
+        // 80px legs clear MinSegmentDistance (50px) and there are plenty of
+        // reversals, but 80px/200ms = 0.4 px/ms is just under MinLegSpeed
+        // (0.5 px/ms). This is the case that matters most in practice:
+        // deliberate everyday mouse movement (e.g. correcting toward a
+        // target) can easily cover this much distance while reversing
+        // direction without being a "shake to find the cursor" gesture.
+        var events = FeedZigzag(d, legs: 8, legLength: 80, legDurationMs: 200);
+        Assert.DoesNotContain(ShakeEvent.Started, events);
+    }
+
+    [Fact]
+    public void DiagonalReversalCountsOnceNotTwice()
+    {
+        var d = NewDetector();
+        // Each leg moves x and y by the same amount at once, so a direction
+        // flip changes both axes simultaneously. This must count as exactly
+        // one reversal -- if x and y were tracked independently, a single
+        // diagonal turn would wrongly register as two reversals, letting a
+        // diagonal shake reach MinReversals in half the genuine direction
+        // changes a horizontal/vertical shake needs.
+        double x = 0, y = 0;
+        long t = 0;
+        var events = new List<ShakeEvent> { d.Update(x, y, t) };
+
+        // 4 legs = 3 genuine reversals: one short of MinReversals (4).
+        for (int i = 0; i < 4; i++)
+        {
+            double step = (i % 2 == 0) ? 60 : -60;
+            x += step;
+            y += step;
+            t += 50;
+            events.Add(d.Update(x, y, t));
+        }
+        Assert.DoesNotContain(ShakeEvent.Started, events);
+
+        // One more leg = the 4th genuine reversal: now it should start.
+        x += 60;
+        y += 60;
+        t += 50;
+        events.Add(d.Update(x, y, t));
+        Assert.Contains(ShakeEvent.Started, events);
     }
 
     [Fact]
@@ -102,12 +151,12 @@ public class ShakeDetectorTests
     }
 
     [Fact]
-    public void StaleAxisStateAfterStopDoesNotGrantPhantomReversal()
+    public void StaleLegStateAfterStopDoesNotGrantPhantomReversal()
     {
         var d = NewDetector();
         // Run a shake to completion. Its last leg (leg 6, i=5) moves in the
-        // negative-x direction, so the horizontal AxisTracker's internal
-        // state ends at _direction=-1, _segmentDistance=60 (>= MinSegmentDistance).
+        // negative-x direction, so the detector's in-progress leg state
+        // ends pointed at (-60, 0) (>= MinSegmentDistance).
         FeedZigzag(d, legs: 6, legLength: 60, legDurationMs: 50);
         Assert.True(d.IsShaking);
         Assert.Equal(ShakeEvent.Stopped, d.Tick(1000));

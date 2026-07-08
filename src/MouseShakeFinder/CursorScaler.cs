@@ -21,8 +21,11 @@ public sealed class CursorScaler
     public const int EnlargedSize = MaxSize;
 
     // Undocumented but stable since Windows 10 1903; what the Settings app calls.
+    // SPIF_SENDCHANGE is required to force the OS to redraw the cursor now;
+    // SPIF_UPDATEINIFILE is deliberately omitted -- this change is transient
+    // (always undone by Restore/RestoreLeftoverIfAny) and persisting it to
+    // disk on every shake only adds latency for no benefit.
     private const uint SPI_SETCURSORSIZE = 0x2029;
-    private const uint SPIF_UPDATEINIFILE = 0x01;
     private const uint SPIF_SENDCHANGE = 0x02;
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -70,6 +73,6 @@ public sealed class CursorScaler
         using var key = Registry.CurrentUser.CreateSubKey(AccessibilityKeyPath);
         key.SetValue(CursorSizeValueName, size);
         int pixels = 16 + size * 16;
-        SystemParametersInfo(SPI_SETCURSORSIZE, 0, pixels, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+        SystemParametersInfo(SPI_SETCURSORSIZE, 0, pixels, SPIF_SENDCHANGE);
     }
 }

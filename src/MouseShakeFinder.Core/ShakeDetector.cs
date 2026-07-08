@@ -14,60 +14,28 @@ public enum ShakeEvent
 /// </summary>
 public sealed class ShakeDetector
 {
-    private sealed class AxisTracker
-    {
-        private readonly double _minSegment;
-        private int _direction; // -1, 0 (unknown yet), +1
-        private double _segmentDistance;
-
-        public AxisTracker(double minSegment) => _minSegment = minSegment;
-
-        /// <summary>Returns true when this delta completes a qualifying direction reversal.</summary>
-        public bool Update(double delta)
-        {
-            if (delta == 0)
-            {
-                return false;
-            }
-
-            int direction = delta > 0 ? 1 : -1;
-            if (direction == _direction)
-            {
-                _segmentDistance += Math.Abs(delta);
-                return false;
-            }
-
-            bool qualifies = _direction != 0 && _segmentDistance >= _minSegment;
-            _direction = direction;
-            _segmentDistance = Math.Abs(delta);
-            return qualifies;
-        }
-
-        /// <summary>Clears direction/segment state so the next shake starts fresh.</summary>
-        public void Reset()
-        {
-            _direction = 0;
-            _segmentDistance = 0;
-        }
-    }
-
     private readonly ShakeSettings _settings;
-    private readonly AxisTracker _horizontal;
-    private readonly AxisTracker _vertical;
     private readonly Queue<long> _reversalTimes = new();
+
     private double _lastX;
     private double _lastY;
     private bool _hasLastPosition;
     private long _lastReversalMs;
 
+    // The current "leg": the movement vector accumulated since the last
+    // direction reversal (or since tracking started). A reversal is a move
+    // whose direction is more than 90 degrees from this accumulated
+    // direction -- checked once for the combined 2D vector, not per axis,
+    // so a single diagonal direction change can't be double-counted as two
+    // reversals the way independent x/y trackers would.
+    private double _legDx;
+    private double _legDy;
+    private long _legStartMs;
+    private bool _legActive;
+
     public bool IsShaking { get; private set; }
 
-    public ShakeDetector(ShakeSettings settings)
-    {
-        _settings = settings;
-        _horizontal = new AxisTracker(settings.MinSegmentDistance);
-        _vertical = new AxisTracker(settings.MinSegmentDistance);
-    }
+    public ShakeDetector(ShakeSettings settings) => _settings = settings;
 
     public ShakeEvent Update(double x, double y, long nowMs)
     {
@@ -84,13 +52,9 @@ public sealed class ShakeDetector
         _lastX = x;
         _lastY = y;
 
-        if (_horizontal.Update(dx))
+        if (dx != 0 || dy != 0)
         {
-            RecordReversal(nowMs);
-        }
-        if (_vertical.Update(dy))
-        {
-            RecordReversal(nowMs);
+            ProcessDelta(dx, dy, nowMs);
         }
 
         while (_reversalTimes.Count > 0 && nowMs - _reversalTimes.Peek() > _settings.WindowMs)
@@ -113,12 +77,56 @@ public sealed class ShakeDetector
         {
             IsShaking = false;
             _reversalTimes.Clear();
-            _horizontal.Reset();
-            _vertical.Reset();
+            _legActive = false;
             return ShakeEvent.Stopped;
         }
 
         return ShakeEvent.None;
+    }
+
+    private void ProcessDelta(double dx, double dy, long nowMs)
+    {
+        if (!_legActive)
+        {
+            StartLeg(dx, dy, nowMs);
+            return;
+        }
+
+        double dot = (_legDx * dx) + (_legDy * dy);
+        if (dot < 0)
+        {
+            if (QualifiesAsReversal(nowMs))
+            {
+                RecordReversal(nowMs);
+            }
+            StartLeg(dx, dy, nowMs);
+        }
+        else
+        {
+            _legDx += dx;
+            _legDy += dy;
+        }
+    }
+
+    private bool QualifiesAsReversal(long nowMs)
+    {
+        double legDistance = Math.Sqrt((_legDx * _legDx) + (_legDy * _legDy));
+        if (legDistance < _settings.MinSegmentDistance)
+        {
+            return false;
+        }
+
+        long legDurationMs = Math.Max(1, nowMs - _legStartMs);
+        double speed = legDistance / legDurationMs;
+        return speed >= _settings.MinLegSpeed;
+    }
+
+    private void StartLeg(double dx, double dy, long nowMs)
+    {
+        _legDx = dx;
+        _legDy = dy;
+        _legStartMs = nowMs;
+        _legActive = true;
     }
 
     private void RecordReversal(long nowMs)
