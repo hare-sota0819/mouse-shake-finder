@@ -64,7 +64,10 @@ public sealed class TrayApp : ApplicationContext
 
         _trayIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            // The app's own icon (embedded via <ApplicationIcon> in the
+            // csproj) is reused here so the exe, Start Menu shortcut, and
+            // tray icon all show the same image from one source file.
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application,
             Text = "Mouse Shake Finder",
             ContextMenuStrip = menu,
             Visible = true,

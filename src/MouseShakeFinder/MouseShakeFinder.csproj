@@ -12,6 +12,7 @@
     <AssemblyName>MouseShakeFinder</AssemblyName>
     <RootNamespace>MouseShakeFinder</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\tray-icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

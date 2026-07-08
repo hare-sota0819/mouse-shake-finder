@@ -6,8 +6,14 @@ to maximum size; when you stop, it returns to your original size.
 
 ## Install
 
-None. Download/build `MouseShakeFinder.exe` and run it. An icon appears
-in the system tray.
+Download `MouseShakeFinder-Setup.exe` from the [latest release](../../releases/latest)
+and run it — standard Windows installer, no admin rights required. It adds
+a Start Menu entry and an uninstaller; a desktop shortcut is optional.
+
+Prefer no installer? Download `MouseShakeFinder.exe` instead and run it
+directly — same app, portable, nothing to install or uninstall.
+
+Either way, an icon appears in the system tray once it's running.
 
 ## Tray menu
 
@@ -18,6 +24,15 @@ in the system tray.
 ## Build (from WSL or Windows, .NET 10 SDK)
 
     dotnet publish src/MouseShakeFinder -c Release -p:PublishSingleFile=true -o publish
+
+Produces the portable `publish/MouseShakeFinder.exe`.
+
+### Building the installer
+
+Requires [Inno Setup 6](https://jrsoftware.org/isinfo.php) (Windows only)
+and the portable exe already published (previous step). Compile
+`installer/MouseShakeFinder.iss` with the Inno Setup Compiler (`ISCC.exe`);
+the result is `publish/installer/MouseShakeFinder-Setup.exe`.
 
 ## Verify
 
